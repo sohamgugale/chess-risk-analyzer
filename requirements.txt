@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 chess==1.10.0
 python-chess==1.999
 pandas>=2.0.0
@@ -9,3 +10,16 @@ plotly>=5.17.0
 requests>=2.31.0
 tqdm>=4.66.0
 Pillow>=10.0.0
+=======
+chess
+python-chess
+pandas
+numpy
+matplotlib
+seaborn
+streamlit
+plotly
+requests
+tqdm
+Pillow
+>>>>>>> 260f76238d9185cdfcdfc963f23bf648d49f0d3d
