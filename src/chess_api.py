@@ -9,7 +9,7 @@ import json
 
 
 class ChessComAPI:
-    """Chess.com API wrapper"""
+    """Chess.com API wrapper with better error handling"""
     
     BASE_URL = "https://api.chess.com/pub"
     
@@ -18,46 +18,60 @@ class ChessComAPI:
     
     def get_player_stats(self) -> Dict:
         """Get player statistics"""
-        url = f"{self.BASE_URL}/player/{self.username}/stats"
-        response = requests.get(url)
-        if response.status_code == 200:
-            return response.json()
+        try:
+            url = f"{self.BASE_URL}/player/{self.username}/stats"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                return response.json()
+        except:
+            pass
         return {}
     
     def get_player_profile(self) -> Dict:
         """Get player profile"""
-        url = f"{self.BASE_URL}/player/{self.username}"
-        response = requests.get(url)
-        if response.status_code == 200:
-            return response.json()
+        try:
+            url = f"{self.BASE_URL}/player/{self.username}"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                return response.json()
+        except:
+            pass
         return {}
     
     def get_archives(self) -> List[str]:
         """Get list of available monthly archives"""
-        url = f"{self.BASE_URL}/player/{self.username}/games/archives"
-        response = requests.get(url)
-        if response.status_code == 200:
-            return response.json()['archives']
+        try:
+            url = f"{self.BASE_URL}/player/{self.username}/games/archives"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                return response.json().get('archives', [])
+        except:
+            pass
         return []
     
     def get_recent_games(self, n_months: int = 1) -> List[Dict]:
         """Download most recent games"""
-        archives = self.get_archives()
-        if not archives:
+        try:
+            archives = self.get_archives()
+            if not archives:
+                return []
+            
+            recent_archives = archives[-n_months:]
+            all_games = []
+            
+            for archive_url in recent_archives:
+                try:
+                    response = requests.get(archive_url, timeout=10)
+                    if response.status_code == 200:
+                        games = response.json().get('games', [])
+                        all_games.extend(games)
+                    time.sleep(0.2)
+                except:
+                    continue
+            
+            return all_games
+        except:
             return []
-        
-        # Get most recent archives
-        recent_archives = archives[-n_months:]
-        
-        all_games = []
-        for archive_url in recent_archives:
-            response = requests.get(archive_url)
-            if response.status_code == 200:
-                games = response.json()['games']
-                all_games.extend(games)
-            time.sleep(0.1)  # Rate limiting
-        
-        return all_games
     
     def format_game_info(self, game: Dict) -> Dict:
         """Format game information"""
@@ -88,28 +102,29 @@ class LichessAPI:
     
     def get_user_profile(self) -> Dict:
         """Get user profile"""
-        url = f"{self.BASE_URL}/user/{self.username}"
-        response = requests.get(url)
-        if response.status_code == 200:
-            return response.json()
+        try:
+            url = f"{self.BASE_URL}/user/{self.username}"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                return response.json()
+        except:
+            pass
         return {}
     
     def get_recent_games(self, max_games: int = 10) -> List[str]:
         """Get recent games as PGN strings"""
-        url = f"{self.BASE_URL}/games/user/{self.username}"
-        params = {
-            'max': max_games,
-            'pgnInJson': False,
-            'rated': True
-        }
-        headers = {'Accept': 'application/x-chess-pgn'}
-        
-        response = requests.get(url, params=params, headers=headers)
-        if response.status_code == 200:
-            # Split PGN text into individual games
-            pgn_text = response.text
-            games = pgn_text.split('\n\n\n')
-            return [g.strip() for g in games if g.strip()]
+        try:
+            url = f"{self.BASE_URL}/games/user/{self.username}"
+            params = {'max': max_games, 'pgnInJson': False, 'rated': True}
+            headers = {'Accept': 'application/x-chess-pgn'}
+            
+            response = requests.get(url, params=params, headers=headers, timeout=10)
+            if response.status_code == 200:
+                pgn_text = response.text
+                games = pgn_text.split('\n\n\n')
+                return [g.strip() for g in games if g.strip()]
+        except:
+            pass
         return []
 
 
@@ -135,15 +150,12 @@ def get_famous_games() -> Dict[str, str]:
 [White "Donald Byrne"]
 [Black "Robert James Fischer"]
 [Result "0-1"]
-[WhiteElo "?"]
-[BlackElo "?"]
 
 1. Nf3 Nf6 2. c4 g6 3. Nc3 Bg7 4. d4 O-O 5. Bf4 d5 6. Qb3 dxc4 7. Qxc4 c6 8. e4 Nbd7 9. Rd1 Nb6 10. Qc5 Bg4 11. Bg5 Na4 12. Qa3 Nxc3 13. bxc3 Nxe4 14. Bxe7 Qb6 15. Bc4 Nxc3 16. Bc5 Rfe8+ 17. Kf1 Be6 18. Bxb6 Bxc4+ 19. Kg1 Ne2+ 20. Kf1 Nxd4+ 21. Kg1 Ne2+ 22. Kf1 Nc3+ 23. Kg1 axb6 24. Qb4 Ra4 25. Qxb6 Nxd1 26. h3 Rxa2 27. Kh2 Nxf2 28. Re1 Rxe1 29. Qd8+ Bf8 30. Nxe1 Bd5 31. Nf3 Ne4 32. Qb8 b5 33. h4 h5 34. Ne5 Kg7 35. Kg1 Bc5+ 36. Kf1 Ng3+ 37. Ke1 Bb4+ 38. Kd1 Bb3+ 39. Kc1 Ne2+ 40. Kb1 Nc3+ 41. Kc1 Rc2# 0-1""",
         
         "The Immortal Game": """[Event "London"]
 [Site "London ENG"]
 [Date "1851.06.21"]
-[Round "?"]
 [White "Adolf Anderssen"]
 [Black "Lionel Kieseritzky"]
 [Result "1-0"]
@@ -153,7 +165,6 @@ def get_famous_games() -> Dict[str, str]:
         "Opera Game": """[Event "Paris Opera"]
 [Site "Paris FRA"]
 [Date "1858.??.??"]
-[Round "?"]
 [White "Paul Morphy"]
 [Black "Duke Karl / Count Isouard"]
 [Result "1-0"]
@@ -163,38 +174,9 @@ def get_famous_games() -> Dict[str, str]:
         "Evergreen Game": """[Event "Berlin"]
 [Site "Berlin GER"]
 [Date "1852.??.??"]
-[Round "?"]
 [White "Adolf Anderssen"]
 [Black "Jean Dufresne"]
 [Result "1-0"]
 
 1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. b4 Bxb4 5. c3 Ba5 6. d4 exd4 7. O-O d3 8. Qb3 Qf6 9. e5 Qg6 10. Re1 Nge7 11. Ba3 b5 12. Qxb5 Rb8 13. Qa4 Bb6 14. Nbd2 Bb7 15. Ne4 Qf5 16. Bxd3 Qh5 17. Nf6+ gxf6 18. exf6 Rg8 19. Rad1 Qxf3 20. Rxe7+ Nxe7 21. Qxd7+ Kxd7 22. Bf5+ Ke8 23. Bd7+ Kf8 24. Bxe7# 1-0"""
     }
-
-
-if __name__ == "__main__":
-    # Test Chess.com API
-    print("Testing Chess.com API...")
-    api = ChessComAPI("sohamgugale")
-    
-    print("\nPlayer Profile:")
-    profile = api.get_player_profile()
-    if profile:
-        print(f"Username: {profile.get('username', 'N/A')}")
-        print(f"Followers: {profile.get('followers', 'N/A')}")
-    
-    print("\nPlayer Stats:")
-    stats = api.get_player_stats()
-    if stats:
-        rapid = stats.get('chess_rapid', {})
-        print(f"Rapid Rating: {rapid.get('last', {}).get('rating', 'N/A')}")
-    
-    print("\nRecent Games (last month):")
-    games = api.get_recent_games(n_months=1)
-    print(f"Found {len(games)} games")
-    
-    if games:
-        latest = api.format_game_info(games[-1])
-        print(f"\nLatest game:")
-        print(f"  {latest['white']} ({latest['white_rating']}) vs {latest['black']} ({latest['black_rating']})")
-        print(f"  Result: {latest['result']}")
