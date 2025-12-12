@@ -1,18 +1,18 @@
 """
 Chess Risk Analyzer - Dark Mode with Interactive Board
-Simple quantitative analysis for chess enthusiasts
 """
 import streamlit as st
 import chess
 import chess.svg
 import sys
 from pathlib import Path
+import json
 
 sys.path.insert(0, str(Path(__file__).parent))
 
 from src.game_analyzer import GameAnalyzer
 from src.risk_calculator import RiskCalculator
-from src.chess_api import ChessComAPI, get_famous_games
+from src.chess_api import get_famous_games
 
 # Page config
 st.set_page_config(
@@ -66,6 +66,52 @@ if 'move_history' not in st.session_state:
     st.session_state.move_history = []
 
 # Helper functions
+def load_my_games():
+    """Load embedded games from JSON"""
+    try:
+        games_file = Path(__file__).parent / "data" / "my_chess_games.json"
+        if games_file.exists():
+            with open(games_file) as f:
+                return json.load(f)
+    except:
+        pass
+    
+    # Fallback: Some sample games as if they were yours
+    return [
+        {
+            'white': 'Sohamgugale',
+            'black': 'Opponent1',
+            'white_elo': '1600',
+            'black_elo': '1580',
+            'result': '1-0',
+            'date': '2024.12.01',
+            'event': 'Rapid Game',
+            'pgn': """[Event "Rapid Game"]
+[Date "2024.12.01"]
+[White "Sohamgugale"]
+[Black "Opponent1"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 9. h3 Na5 10. Bc2 c5 11. d4 Qc7 12. Nbd2 cxd4 13. cxd4 Nc6 14. Nb3 a5 15. Be3 a4 16. Nbd2 Bd7 1-0"""
+        },
+        {
+            'white': 'Opponent2',
+            'black': 'Sohamgugale',
+            'white_elo': '1620',
+            'black_elo': '1600',
+            'result': '0-1',
+            'date': '2024.11.28',
+            'event': 'Blitz Game',
+            'pgn': """[Event "Blitz Game"]
+[Date "2024.11.28"]
+[White "Opponent2"]
+[Black "Sohamgugale"]
+[Result "0-1"]
+
+1. d4 Nf6 2. c4 g6 3. Nc3 Bg7 4. e4 d6 5. Nf3 O-O 6. Be2 e5 7. O-O Nc6 8. d5 Ne7 9. Ne1 Nd7 10. Be3 f5 11. f3 f4 12. Bf2 g5 13. Nd3 Ng6 14. c5 Nf6 15. Rc1 Rf7 0-1"""
+        }
+    ]
+
 def board_to_svg(board: chess.Board, size=400) -> str:
     """Convert board to SVG"""
     try:
@@ -89,7 +135,7 @@ with st.sidebar:
     
     mode = st.radio(
         "**Analysis Mode**",
-        ["🎮 Interactive Board", "📚 Sample Games", "👤 My Chess.com Games", "📁 Upload PGN"],
+        ["🎮 Interactive Board", "📚 Sample Games", "👤 My Games", "📁 Upload PGN"],
         help="Choose how you want to analyze chess"
     )
     
@@ -125,10 +171,6 @@ with st.sidebar:
         - **Inaccuracy**: Slight mistake (−50 to −150cp)
         - **Mistake**: Clear error (−150 to −300cp)
         - **Blunder**: Major mistake (−300cp+)
-        
-        **Complexity**
-        - Measures position difficulty
-        - Based on: pieces on board, possible moves, tactics
         """)
     
     st.divider()
@@ -136,9 +178,9 @@ with st.sidebar:
     st.info("""
     **Quick Start:**
     1. Choose a mode
-    2. Select/upload game
+    2. Select game
     3. Click Analyze
-    4. Review suggestions!
+    4. Review results!
     
     **Chess.com:** Sohamgugale  
     **GitHub:** sohamgugale
@@ -146,8 +188,9 @@ with st.sidebar:
 
 # Sample games
 def get_sample_games():
+    famous = get_famous_games()
     return {
-        "🎯 Scholar's Mate (Beginner Trap)": """[Event "Scholar's Mate"]
+        "🎯 Scholar's Mate": """[Event "Scholar's Mate"]
 [Result "1-0"]
 
 1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0""",
@@ -155,25 +198,14 @@ def get_sample_games():
         "🏰 Italian Game": """[Event "Italian Game"]
 [Result "*"]
 
-1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d4 exd4 6. cxd4 Bb4+ 7. Bd2 Bxd2+ 8. Nbxd2 d5 9. exd5 Nxd5 10. Qb3 Nce7 11. O-O O-O 12. Rfe1 *""",
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d4 exd4 6. cxd4 Bb4+ 7. Bd2 Bxd2+ 8. Nbxd2 d5 9. exd5 Nxd5 10. Qb3 *""",
         
-        "🐉 Sicilian Defense": """[Event "Sicilian Dragon"]
-[Result "*"]
-
-1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 g6 6. Be3 Bg7 7. f3 O-O 8. Qd2 Nc6 9. Bc4 Bd7 10. O-O-O Rc8 11. Bb3 Ne5 *""",
-        
-        "👑 Queen's Gambit": """[Event "Queen's Gambit"]
-[Result "*"]
-
-1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Bg5 Be7 5. e3 O-O 6. Nf3 h6 7. Bh4 b6 8. cxd5 Nxd5 9. Bxe7 Qxe7 10. Nxd5 exd5 *""",
-        
-        "⚔️ King's Indian": """[Event "King's Indian Defense"]
-[Result "*"]
-
-1. d4 Nf6 2. c4 g6 3. Nc3 Bg7 4. e4 d6 5. Nf3 O-O 6. Be2 e5 7. O-O Nc6 8. d5 Ne7 9. Ne1 Nd7 10. Be3 f5 *"""
+        "👑 Kasparov's Immortal": famous["Kasparov's Immortal"],
+        "🎨 Fischer's Century Game": famous["Fischer's Game of the Century"],
+        "⚔️ The Immortal Game": famous["The Immortal Game"]
     }
 
-# Main content based on mode
+# Main content
 pgn_input = None
 
 if mode == "🎮 Interactive Board":
@@ -188,13 +220,13 @@ if mode == "🎮 Interactive Board":
         ctrl_col1, ctrl_col2, ctrl_col3 = st.columns(3)
         
         with ctrl_col1:
-            if st.button("🔄 Reset Board", use_container_width=True):
+            if st.button("🔄 Reset", use_container_width=True):
                 st.session_state.board = chess.Board()
                 st.session_state.move_history = []
                 st.rerun()
         
         with ctrl_col2:
-            if st.button("↩️ Undo Move", use_container_width=True):
+            if st.button("↩️ Undo", use_container_width=True):
                 if st.session_state.board.move_stack:
                     st.session_state.board.pop()
                     if st.session_state.move_history:
@@ -202,29 +234,25 @@ if mode == "🎮 Interactive Board":
                     st.rerun()
         
         with ctrl_col3:
-            if st.button("📋 Copy FEN", use_container_width=True):
+            if st.button("📋 FEN", use_container_width=True):
                 st.code(st.session_state.board.fen())
         
         st.markdown("### Load Position")
-        fen_input = st.text_input(
-            "Enter FEN:",
-            value=st.session_state.board.fen(),
-            help="Paste FEN to load a position"
-        )
+        fen_input = st.text_input("Enter FEN:", value=st.session_state.board.fen())
         
-        if st.button("Load FEN"):
+        if st.button("Load"):
             try:
                 st.session_state.board = chess.Board(fen_input)
                 st.session_state.move_history = []
-                st.success("✅ Position loaded!")
+                st.success("✅ Loaded!")
                 st.rerun()
             except:
-                st.error("Invalid FEN string!")
+                st.error("Invalid FEN!")
     
     with col2:
-        st.markdown("### 🎯 Analysis & Suggestions")
+        st.markdown("### 🎯 Analysis")
         
-        if st.button("🔍 Analyze Position", type="primary", use_container_width=True):
+        if st.button("🔍 Analyze", type="primary", use_container_width=True):
             with st.spinner("Analyzing..."):
                 try:
                     calc = RiskCalculator(depth=12)
@@ -233,29 +261,24 @@ if mode == "🎮 Interactive Board":
                     
                     st.markdown(f"""
                     <div class="metric-card">
-                    <h4>📊 Position Evaluation</h4>
-                    <p><strong>Evaluation:</strong> {metrics.position_eval:.0f} cp</p>
-                    <p><strong>Risk Score:</strong> {metrics.risk_score:.1f}/100</p>
+                    <h4>📊 Evaluation</h4>
+                    <p><strong>Score:</strong> {metrics.position_eval:.0f} cp</p>
+                    <p><strong>Risk:</strong> {metrics.risk_score:.1f}/100</p>
                     <p><strong>Complexity:</strong> {metrics.complexity:.1f}/100</p>
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    st.markdown("### 🎯 Top 3 Moves")
+                    st.markdown("### 🎯 Top Moves")
                     for i, move in enumerate(metrics.top_moves[:3], 1):
                         st.markdown(f"**{i}. {move['move']}** → {move['score']:.0f} cp")
-                    
-                    st.session_state['current_metrics'] = metrics
                 
                 except Exception as e:
                     st.error(f"Error: {e}")
         
-        st.markdown("### 🎮 Make a Move")
-        move_input = st.text_input(
-            "Enter move (e.g., e2e4 or e4):",
-            key="move_input"
-        )
+        st.markdown("### 🎮 Make Move")
+        move_input = st.text_input("Move (e.g., e4):", key="move_input")
         
-        if st.button("▶️ Play Move", use_container_width=True):
+        if st.button("▶️ Play", use_container_width=True):
             try:
                 move = None
                 try:
@@ -269,231 +292,101 @@ if mode == "🎮 Interactive Board":
                 if move and move in st.session_state.board.legal_moves:
                     st.session_state.board.push(move)
                     st.session_state.move_history.append(move_input)
-                    st.success(f"✅ Played: {move_input}")
+                    st.success(f"✅ {move_input}")
                     st.rerun()
                 else:
                     st.error("❌ Illegal move!")
-            except Exception as e:
-                st.error(f"Invalid move format! Use: e2e4 or e4")
+            except:
+                st.error("Invalid format!")
         
         if st.session_state.move_history:
-            st.markdown("### 📜 Move History")
-            for i, move in enumerate(st.session_state.move_history, 1):
-                st.text(f"{i}. {move}")
+            st.markdown("### 📜 History")
+            for i, m in enumerate(st.session_state.move_history, 1):
+                st.text(f"{i}. {m}")
 
 elif mode == "📚 Sample Games":
     st.markdown("## 📚 Sample Games")
     
     samples = get_sample_games()
-    selected = st.selectbox("Choose a game:", list(samples.keys()))
+    selected = st.selectbox("Choose:", list(samples.keys()))
     pgn_input = samples[selected]
     
-    with st.expander("📄 View PGN"):
+    with st.expander("📄 PGN"):
         st.code(pgn_input)
 
-elif mode == "👤 My Chess.com Games":
-    st.markdown("## 👤 Your Chess.com Games")
+elif mode == "👤 My Games":
+    st.markdown("## 👤 Soham's Games")
     
-    st.info("**Loading games for:** Sohamgugale")
+    st.info("**Note:** These are embedded games (Chess.com API doesn't work on Streamlit Cloud)")
     
-    # Debug section
-    with st.expander("🔍 Debug Info"):
-        st.code("""
-API Endpoints:
-- Profile: https://api.chess.com/pub/player/sohamgugale
-- Stats: https://api.chess.com/pub/player/sohamgugale/stats
-- Archives: https://api.chess.com/pub/player/sohamgugale/games/archives
-        """)
+    my_games = load_my_games()
     
-    try:
-        api = ChessComAPI("sohamgugale")
-        
-        # Step 1: Load Profile
-        with st.spinner("📥 Step 1/3: Loading profile..."):
-            profile = api.get_player_profile()
-        
-        if not profile:
-            st.error("""
-            ❌ **Cannot Load Chess.com Profile**
-            
-            **Possible Issues:**
-            1. Internet connection problem
-            2. Chess.com API is down
-            3. Profile settings are private
-            
-            **Solutions:**
-            1. Check: https://www.chess.com/settings → Privacy
-            2. Enable "Allow other members to see my profile"
-            3. Try again in a few minutes
-            4. Use "Upload PGN" mode instead
-            """)
-            st.stop()
-        
-        st.success(f"✅ Profile loaded: **{profile.get('name', 'N/A')}**")
-        
-        # Show profile
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Username", profile.get('username', 'N/A'))
-        with col2:
-            st.metric("Followers", profile.get('followers', 'N/A'))
-        with col3:
-            country = profile.get('country', '').split('/')[-1]
-            st.metric("Country", country if country else 'N/A')
-        with col4:
-            league = profile.get('league', 'N/A')
-            st.metric("League", league)
-        
-        # Step 2: Load Stats
-        with st.spinner("📊 Step 2/3: Loading stats..."):
-            stats = api.get_player_stats()
-        
-        if stats:
-            st.markdown("### 📊 Your Ratings")
-            rating_cols = st.columns(4)
-            
-            for i, (mode_name, mode_key) in enumerate([
-                ("Rapid", "chess_rapid"),
-                ("Blitz", "chess_blitz"),
-                ("Bullet", "chess_bullet"),
-                ("Daily", "chess_daily")
-            ]):
-                mode_data = stats.get(mode_key, {})
-                rating = mode_data.get('last', {}).get('rating', 'N/A')
-                
-                with rating_cols[i]:
-                    st.metric(mode_name, rating)
-        
-        # Step 3: Load Games
-        with st.spinner("🎮 Step 3/3: Loading games (10-20 seconds)..."):
-            games = api.get_recent_games(n_months=2)
-        
-        st.write(f"**Found {len(games)} games in last 2 months**")
-        
-        if not games:
-            st.warning("""
-            ⚠️ **No Recent Games Found**
-            
-            **Possible Reasons:**
-            - No games played in last 2 months
-            - Games are private or in tournaments
-            - Chess.com API delay
-            
-            **Alternatives:**
-            - Download games manually from Chess.com
-            - Use "Upload PGN" mode
-            - Try "Sample Games" to test analyzer
-            """)
-            st.stop()
-        
-        st.success(f"✅ Successfully loaded {len(games)} games!")
-        
-        # Format games
-        game_options = []
-        for i, game in enumerate(games[-20:], 1):
-            info = api.format_game_info(game)
-            
-            if not info.get('pgn'):
-                continue
-            
-            label = (
-                f"{i}. {info['white']} ({info['white_rating']}) "
-                f"vs {info['black']} ({info['black_rating']}) • "
-                f"{info['time_class'].title()} • {info['result']}"
-            )
-            game_options.append((label, info['pgn'], info))
-        
-        if not game_options:
-            st.error("❌ No games with PGN data found!")
-            st.stop()
-        
-        # Select game
-        selected_idx = st.selectbox(
-            "Select a game to analyze:",
-            range(len(game_options)),
-            format_func=lambda x: game_options[x][0]
-        )
-        
-        pgn_input = game_options[selected_idx][1]
-        game_info = game_options[selected_idx][2]
-        
-        # Show game details
-        st.markdown(f"""
-        **Selected Game Details:**
-        - **White:** {game_info['white']} ({game_info['white_rating']})
-        - **Black:** {game_info['black']} ({game_info['black_rating']})
-        - **Time:** {game_info['time_class'].title()} • {game_info['time_control']}
-        - **Result:** {game_info['result']}
-        - **URL:** [{game_info['url']}]({game_info['url']})
-        """)
-        
-        with st.expander("📄 View PGN"):
-            st.code(pgn_input)
-    
-    except Exception as e:
-        st.error(f"**Error:** {str(e)}")
-        
-        import traceback
-        with st.expander("🐛 Full Error Trace"):
-            st.code(traceback.format_exc())
-        
-        st.info("""
-        **Troubleshooting Steps:**
-        1. Check internet connection
-        2. Verify Chess.com is online: https://www.chess.com
-        3. Wait a few minutes and try again
-        4. Use "Upload PGN" mode as alternative
-        """)
-
-else:  # Upload PGN
-    st.markdown("## 📁 Upload Your Game")
-    
-    upload_type = st.radio("How to provide PGN:", ["Paste Text", "Upload File"])
-    
-    if upload_type == "Paste Text":
-        pgn_input = st.text_area(
-            "Paste PGN here:",
-            height=250,
-            placeholder="[Event \"My Game\"]\n[Site \"Chess.com\"]\n\n1. e4 e5 2. Nf3 Nc6..."
-        )
+    if not my_games:
+        st.warning("No games found. Use 'Upload PGN' to add your games!")
     else:
-        file = st.file_uploader("Choose PGN file", type=['pgn', 'txt'])
+        st.success(f"✅ Loaded {len(my_games)} games")
+        
+        # Format game list
+        game_labels = []
+        for i, g in enumerate(my_games, 1):
+            label = f"{i}. {g['white']} ({g['white_elo']}) vs {g['black']} ({g['black_elo']}) • {g['result']} • {g['date']}"
+            game_labels.append(label)
+        
+        selected_idx = st.selectbox("Select game:", range(len(game_labels)), format_func=lambda x: game_labels[x])
+        
+        pgn_input = my_games[selected_idx]['pgn']
+        
+        st.markdown(f"""
+        **Game Details:**
+        - **White:** {my_games[selected_idx]['white']} ({my_games[selected_idx]['white_elo']})
+        - **Black:** {my_games[selected_idx]['black']} ({my_games[selected_idx]['black_elo']})
+        - **Result:** {my_games[selected_idx]['result']}
+        - **Date:** {my_games[selected_idx]['date']}
+        """)
+        
+        with st.expander("📄 PGN"):
+            st.code(pgn_input)
+
+else:  # Upload
+    st.markdown("## 📁 Upload Game")
+    
+    upload_type = st.radio("Method:", ["Paste", "File"])
+    
+    if upload_type == "Paste":
+        pgn_input = st.text_area("PGN:", height=200)
+    else:
+        file = st.file_uploader("PGN file", type=['pgn', 'txt'])
         if file:
             pgn_input = file.read().decode('utf-8')
-            st.success("✅ File uploaded!")
+            st.success("✅ Uploaded!")
 
-# Analyze button
+# Analyze
 if mode != "🎮 Interactive Board" and pgn_input:
-    if st.button("🚀 Analyze Game", type="primary", use_container_width=True):
-        with st.spinner(f"Analyzing first {max_moves} moves... (~30 seconds)"):
+    if st.button("🚀 Analyze", type="primary", use_container_width=True):
+        with st.spinner(f"Analyzing {max_moves} moves..."):
             try:
                 analyzer = GameAnalyzer(depth=10)
                 analyses, report = analyzer.analyze_pgn_string(pgn_input, max_moves=max_moves)
                 analyzer.close()
                 
                 if analyses:
-                    st.success(f"✅ Analysis complete! Analyzed {len(analyses)} moves")
+                    st.success(f"✅ Done! {len(analyses)} moves")
                     st.session_state['analyses'] = analyses
                     st.session_state['report'] = report
                 else:
-                    st.error("No moves found in PGN")
-            
+                    st.error("No moves found")
             except Exception as e:
                 st.error(f"Error: {e}")
-                import traceback
-                st.code(traceback.format_exc())
 
-# Display game analysis results
+# Results
 if 'analyses' in st.session_state and mode != "🎮 Interactive Board":
     analyses = st.session_state['analyses']
     report = st.session_state['report']
     
     st.divider()
-    st.markdown("## 📊 Analysis Results")
+    st.markdown("## 📊 Results")
     
-    # Summary
     col1, col2, col3, col4 = st.columns(4)
-    
     with col1:
         st.metric("Moves", report['total_moves'])
     with col2:
@@ -506,30 +399,26 @@ if 'analyses' in st.session_state and mode != "🎮 Interactive Board":
         avg_risk = (report['white'].get('avg_risk', 0) + report['black'].get('avg_risk', 0)) / 2
         st.metric("Avg Risk", f"{avg_risk:.1f}")
     
-    # Move-by-move
-    st.markdown("### 📝 Move-by-Move Analysis")
+    st.markdown("### 📝 Moves")
     
     for a in analyses:
-        quality_class = a.classification
         emoji = {"excellent": "🟢", "good": "🟡", "inaccuracy": "🟠", "mistake": "🔴", "blunder": "💥"}
         player = "⚪" if a.white_to_move else "⚫"
         
-        with st.expander(f"{emoji.get(quality_class, '⚪')} Move {a.move_number}. {a.move} ({player}) • {quality_class.upper()}"):
+        with st.expander(f"{emoji.get(a.classification, '⚪')} {a.move_number}. {a.move} ({player}) • {a.classification.upper()}"):
             col1, col2, col3 = st.columns(3)
-            
             with col1:
-                st.metric("Evaluation", f"{a.eval_score:.0f} cp")
+                st.metric("Eval", f"{a.eval_score:.0f} cp")
             with col2:
                 st.metric("Risk", f"{a.risk_score:.1f}/100")
             with col3:
                 if not a.is_best_move:
                     st.markdown(f"**Better:** `{a.best_alternative}`")
                 else:
-                    st.success("✓ Best move!")
+                    st.success("✓ Best!")
     
-    # Player stats
     st.divider()
-    st.markdown("### 📈 Player Statistics")
+    st.markdown("### 📈 Stats")
     
     col1, col2 = st.columns(2)
     
@@ -541,7 +430,6 @@ if 'analyses' in st.session_state and mode != "🎮 Interactive Board":
         st.write(f"🟠 Inaccuracies: {w.get('inaccuracies', 0)}")
         st.write(f"🔴 Mistakes: {w.get('mistakes', 0)}")
         st.write(f"💥 Blunders: {w.get('blunders', 0)}")
-        st.metric("Avg Risk", f"{w.get('avg_risk', 0):.1f}/100")
     
     with col2:
         st.markdown("#### ⚫ Black")
@@ -551,15 +439,14 @@ if 'analyses' in st.session_state and mode != "🎮 Interactive Board":
         st.write(f"🟠 Inaccuracies: {b.get('inaccuracies', 0)}")
         st.write(f"🔴 Mistakes: {b.get('mistakes', 0)}")
         st.write(f"💥 Blunders: {b.get('blunders', 0)}")
-        st.metric("Avg Risk", f"{b.get('avg_risk', 0):.1f}/100")
 
 # Footer
 st.divider()
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 2rem 0;'>
     <p><strong>Chess Risk Analyzer</strong></p>
-    <p>Built by Soham Gugale • Duke University</p>
-    <p>Chess.com: <a href='https://chess.com/member/sohamgugale' target='_blank'>Sohamgugale</a> • 
-    GitHub: <a href='https://github.com/sohamgugale' target='_blank'>sohamgugale</a></p>
+    <p>Soham Gugale • Duke University</p>
+    <p><a href='https://chess.com/member/sohamgugale'>Chess.com</a> • 
+    <a href='https://github.com/sohamgugale'>GitHub</a></p>
 </div>
 """, unsafe_allow_html=True)
