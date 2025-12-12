@@ -25,7 +25,8 @@ class MoveAnalysis:
     risk_score: float
     is_best_move: bool
     best_alternative: str
-    classification: str  # "excellent", "good", "inaccuracy", "mistake", "blunder"
+    classification: str
+    fen_after: str  # Added for board display
 
 
 class GameAnalyzer:
@@ -61,6 +62,7 @@ class GameAnalyzer:
         
         # Make move and evaluate
         board.push(move)
+        fen_after = board.fen()  # Capture FEN after move
         eval_after = -self.risk_calc.analyzer.evaluate_position(board).score
         board.pop()
         
@@ -83,17 +85,18 @@ class GameAnalyzer:
             risk_score=metrics_before.risk_score,
             is_best_move=is_best,
             best_alternative=best_alternative,
-            classification=classification
+            classification=classification,
+            fen_after=fen_after
         )
     
-    def analyze_game(self, game: chess.pgn.Game, max_moves: int = 15) -> List[MoveAnalysis]:
-        """Analyze game - LIMITED to first N moves for speed"""
+    def analyze_game(self, game: chess.pgn.Game, max_moves: int = 50) -> List[MoveAnalysis]:
+        """Analyze game - up to max_moves"""
         if game is None:
             return []
         
         analyses = []
         board = game.board()
-        moves = list(game.mainline_moves())[:max_moves]  # LIMIT MOVES
+        moves = list(game.mainline_moves())[:max_moves]
         
         print(f"Analyzing first {len(moves)} moves...")
         
@@ -137,7 +140,7 @@ class GameAnalyzer:
             "black": stats(black)
         }
     
-    def analyze_pgn_string(self, pgn_string: str, max_moves: int = 15) -> tuple:
+    def analyze_pgn_string(self, pgn_string: str, max_moves: int = 50) -> tuple:
         """Analyze from PGN string"""
         game = self.parser.parse_pgn_string(pgn_string)
         analyses = self.analyze_game(game, max_moves=max_moves)
