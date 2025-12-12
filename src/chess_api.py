@@ -1,131 +1,138 @@
 """
-Chess.com and Lichess API integration
+Chess.com API integration
 """
 import requests
-from typing import List, Dict, Optional
+from typing import List, Dict
 import time
-from datetime import datetime
-import json
 
 
 class ChessComAPI:
-    """Chess.com API wrapper with better error handling"""
+    """Chess.com API wrapper with robust error handling"""
     
     BASE_URL = "https://api.chess.com/pub"
     
     def __init__(self, username: str):
         self.username = username.lower()
     
-    def get_player_stats(self) -> Dict:
-        """Get player statistics"""
-        try:
-            url = f"{self.BASE_URL}/player/{self.username}/stats"
-            response = requests.get(url, timeout=5)
-            if response.status_code == 200:
-                return response.json()
-        except:
-            pass
-        return {}
-    
     def get_player_profile(self) -> Dict:
         """Get player profile"""
         try:
             url = f"{self.BASE_URL}/player/{self.username}"
-            response = requests.get(url, timeout=5)
+            print(f"Fetching profile: {url}")
+            response = requests.get(url, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                print(f"✓ Profile loaded: {data.get('username')}")
+                return data
+            else:
+                print(f"✗ Profile error: {response.status_code}")
+                return {}
+        except Exception as e:
+            print(f"✗ Profile exception: {e}")
+            return {}
+    
+    def get_player_stats(self) -> Dict:
+        """Get player statistics"""
+        try:
+            url = f"{self.BASE_URL}/player/{self.username}/stats"
+            response = requests.get(url, timeout=10)
+            
             if response.status_code == 200:
                 return response.json()
+            return {}
         except:
-            pass
-        return {}
+            return {}
     
     def get_archives(self) -> List[str]:
         """Get list of available monthly archives"""
         try:
             url = f"{self.BASE_URL}/player/{self.username}/games/archives"
-            response = requests.get(url, timeout=5)
+            print(f"Fetching archives: {url}")
+            response = requests.get(url, timeout=10)
+            
             if response.status_code == 200:
-                return response.json().get('archives', [])
-        except:
-            pass
-        return []
+                archives = response.json().get('archives', [])
+                print(f"✓ Found {len(archives)} archive months")
+                return archives
+            else:
+                print(f"✗ Archives error: {response.status_code}")
+                return []
+        except Exception as e:
+            print(f"✗ Archives exception: {e}")
+            return []
     
-    def get_recent_games(self, n_months: int = 1) -> List[Dict]:
+    def get_recent_games(self, n_months: int = 2) -> List[Dict]:
         """Download most recent games"""
         try:
             archives = self.get_archives()
+            
             if not archives:
+                print("✗ No archives found")
                 return []
             
+            print(f"Latest archive: {archives[-1]}")
+            
+            # Get games from most recent months
             recent_archives = archives[-n_months:]
             all_games = []
             
             for archive_url in recent_archives:
                 try:
-                    response = requests.get(archive_url, timeout=10)
+                    print(f"Fetching games from: {archive_url}")
+                    response = requests.get(archive_url, timeout=15)
+                    
                     if response.status_code == 200:
-                        games = response.json().get('games', [])
+                        games_data = response.json()
+                        games = games_data.get('games', [])
+                        print(f"✓ Got {len(games)} games from this month")
                         all_games.extend(games)
-                    time.sleep(0.2)
-                except:
+                    
+                    time.sleep(0.3)  # Rate limiting
+                    
+                except Exception as e:
+                    print(f"✗ Error fetching archive: {e}")
                     continue
             
+            print(f"✓ Total games retrieved: {len(all_games)}")
             return all_games
-        except:
+            
+        except Exception as e:
+            print(f"✗ Error in get_recent_games: {e}")
             return []
     
     def format_game_info(self, game: Dict) -> Dict:
         """Format game information"""
-        white = game.get('white', {})
-        black = game.get('black', {})
-        
-        return {
-            'white': white.get('username', 'Unknown'),
-            'black': black.get('username', 'Unknown'),
-            'white_rating': white.get('rating', '?'),
-            'black_rating': black.get('rating', '?'),
-            'result': white.get('result', '?'),
-            'time_class': game.get('time_class', 'unknown'),
-            'time_control': game.get('time_control', '?'),
-            'end_time': game.get('end_time', 0),
-            'url': game.get('url', ''),
-            'pgn': game.get('pgn', '')
-        }
-
-
-class LichessAPI:
-    """Lichess API wrapper"""
-    
-    BASE_URL = "https://lichess.org/api"
-    
-    def __init__(self, username: str):
-        self.username = username
-    
-    def get_user_profile(self) -> Dict:
-        """Get user profile"""
         try:
-            url = f"{self.BASE_URL}/user/{self.username}"
-            response = requests.get(url, timeout=5)
-            if response.status_code == 200:
-                return response.json()
-        except:
-            pass
-        return {}
-    
-    def get_recent_games(self, max_games: int = 10) -> List[str]:
-        """Get recent games as PGN strings"""
-        try:
-            url = f"{self.BASE_URL}/games/user/{self.username}"
-            params = {'max': max_games, 'pgnInJson': False, 'rated': True}
-            headers = {'Accept': 'application/x-chess-pgn'}
+            white = game.get('white', {})
+            black = game.get('black', {})
             
-            response = requests.get(url, params=params, headers=headers, timeout=10)
-            if response.status_code == 200:
-                pgn_text = response.text
-                games = pgn_text.split('\n\n\n')
-                return [g.strip() for g in games if g.strip()]
-        except:
-            pass
-        return []
+            return {
+                'white': white.get('username', 'Unknown'),
+                'black': black.get('username', 'Unknown'),
+                'white_rating': white.get('rating', '?'),
+                'black_rating': black.get('rating', '?'),
+                'result': white.get('result', '?'),
+                'time_class': game.get('time_class', 'unknown'),
+                'time_control': game.get('time_control', '?'),
+                'end_time': game.get('end_time', 0),
+                'url': game.get('url', ''),
+                'pgn': game.get('pgn', '')
+            }
+        except Exception as e:
+            print(f"✗ Error formatting game: {e}")
+            return {
+                'white': 'Unknown',
+                'black': 'Unknown',
+                'white_rating': '?',
+                'black_rating': '?',
+                'result': '?',
+                'time_class': 'unknown',
+                'time_control': '?',
+                'end_time': 0,
+                'url': '',
+                'pgn': ''
+            }
 
 
 def get_famous_games() -> Dict[str, str]:
@@ -134,19 +141,15 @@ def get_famous_games() -> Dict[str, str]:
         "Kasparov's Immortal": """[Event "Hoogovens A Tournament"]
 [Site "Wijk aan Zee NED"]
 [Date "1999.01.20"]
-[Round "4"]
 [White "Garry Kasparov"]
 [Black "Veselin Topalov"]
 [Result "1-0"]
-[WhiteElo "2812"]
-[BlackElo "2700"]
 
 1. e4 d6 2. d4 Nf6 3. Nc3 g6 4. Be3 Bg7 5. Qd2 c6 6. f3 b5 7. Nge2 Nbd7 8. Bh6 Bxh6 9. Qxh6 Bb7 10. a3 e5 11. O-O-O Qe7 12. Kb1 a6 13. Nc1 O-O-O 14. Nb3 exd4 15. Rxd4 c5 16. Rd1 Nb6 17. g3 Kb8 18. Na5 Ba8 19. Bh3 d5 20. Qf4+ Ka7 21. Rhe1 d4 22. Nd5 Nbxd5 23. exd5 Qd6 24. Rxd4 cxd4 25. Re7+ Kb6 26. Qxd4+ Kxa5 27. b4+ Ka4 28. Qc3 Qxd5 29. Ra7 Bb7 30. Rxb7 Qc4 31. Qxf6 Kxa3 32. Qxa6+ Kxb4 33. c3+ Kxc3 34. Qa1+ Kd2 35. Qb2+ Kd1 36. Bf1 Rd2 37. Rd7 Rxd7 38. Bxc4 bxc4 39. Qxh8 Rd3 40. Qa8 c3 41. Qa4+ Ke1 42. f4 f5 43. Kc1 Rd2 44. Qa7 1-0""",
         
         "Fischer's Game of the Century": """[Event "Third Rosenwald Trophy"]
 [Site "New York, NY USA"]
 [Date "1956.10.17"]
-[Round "8"]
 [White "Donald Byrne"]
 [Black "Robert James Fischer"]
 [Result "0-1"]
