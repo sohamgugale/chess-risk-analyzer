@@ -1,8 +1,10 @@
 """
-Chess Risk Analyzer - Interactive Board with Drag & Drop
+Chess Risk Analyzer - Interactive Board (Manual Input)
+Analyze up to 50 moves per game
 """
 import streamlit as st
 import chess
+import chess.svg
 import sys
 from pathlib import Path
 import json
@@ -12,14 +14,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 from src.game_analyzer import GameAnalyzer
 from src.risk_calculator import RiskCalculator
 from src.chess_api import get_famous_games
-
-# Try to import interactive chess board
-try:
-    from streamlit_chess_board import st_chess_board
-    HAS_INTERACTIVE_BOARD = True
-except ImportError:
-    HAS_INTERACTIVE_BOARD = False
-    import chess.svg
 
 # Page config
 st.set_page_config(
@@ -66,8 +60,6 @@ if 'board' not in st.session_state:
     st.session_state.board = chess.Board()
 if 'move_history' not in st.session_state:
     st.session_state.move_history = []
-if 'board_key' not in st.session_state:
-    st.session_state.board_key = 0
 
 # Helper functions
 def load_my_games():
@@ -99,34 +91,10 @@ def load_my_games():
         }
     ]
 
-def render_interactive_board():
-    """Render interactive drag-and-drop board"""
-    if HAS_INTERACTIVE_BOARD:
-        # Use interactive board with drag & drop
-        board_dict = st_chess_board(
-            board_fen=st.session_state.board.fen(),
-            dark_square_color="#769656",
-            light_square_color="#eeeed2",
-            key=f"board_{st.session_state.board_key}"
-        )
-        
-        # Handle move from interactive board
-        if board_dict and 'move' in board_dict:
-            move_str = board_dict['move']
-            try:
-                move = chess.Move.from_uci(move_str)
-                if move in st.session_state.board.legal_moves:
-                    st.session_state.board.push(move)
-                    st.session_state.move_history.append(st.session_state.board.san(move))
-                    st.session_state.board_key += 1
-                    st.rerun()
-            except:
-                pass
-    else:
-        # Fallback to SVG board
-        svg = chess.svg.board(st.session_state.board, size=500)
-        st.markdown(f'<div class="chess-board">{svg}</div>', unsafe_allow_html=True)
-        st.info("💡 **Tip:** Install `streamlit-chess-board` for drag-and-drop functionality")
+def render_board(board: chess.Board, size=500):
+    """Render SVG chess board"""
+    svg = chess.svg.board(board, size=size)
+    st.markdown(f'<div class="chess-board">{svg}</div>', unsafe_allow_html=True)
 
 # Title
 st.markdown('<h1 class="main-title">♟️ Chess Risk Analyzer</h1>', unsafe_allow_html=True)
@@ -151,7 +119,7 @@ with st.sidebar:
             max_value=50,
             value=30,
             step=5,
-            help="Analyze up to 50 moves (longer games take more time)"
+            help="More moves = longer analysis time"
         )
         
         st.info(f"⏱️ **Est. time:** ~{max_moves * 2} seconds")
@@ -161,7 +129,7 @@ with st.sidebar:
     with st.expander("📖 Metrics Guide"):
         st.markdown("""
         **Risk Score (0-100)**
-        - **0-30**: Safe
+        - **0-30**: Safe position
         - **30-60**: Complications
         - **60-100**: Very risky
         
@@ -183,7 +151,7 @@ with st.sidebar:
     **Quick Start:**
     1. Choose mode
     2. Select game
-    3. Analyze
+    3. Click Analyze
     
     **Chess.com:** Sohamgugale  
     **GitHub:** sohamgugale
@@ -214,24 +182,11 @@ pgn_input = None
 if mode == "🎮 Interactive Board":
     st.markdown("## 🎮 Interactive Chess Board")
     
-    if not HAS_INTERACTIVE_BOARD:
-        st.warning("""
-        ⚠️ **Interactive drag-and-drop not available**
-        
-        The `streamlit-chess-board` package isn't installed on Streamlit Cloud.
-        You can still make moves manually using the text input below.
-        """)
-    
     col1, col2 = st.columns([2, 1])
     
     with col1:
         st.markdown("### 🎯 Board Position")
-        
-        # Show if drag-and-drop is enabled
-        if HAS_INTERACTIVE_BOARD:
-            st.success("✅ **Drag & Drop Enabled** - Click and drag pieces to move!")
-        
-        render_interactive_board()
+        render_board(st.session_state.board)
         
         # Controls
         ctrl_col1, ctrl_col2, ctrl_col3, ctrl_col4 = st.columns(4)
@@ -240,7 +195,6 @@ if mode == "🎮 Interactive Board":
             if st.button("🔄 Reset", use_container_width=True):
                 st.session_state.board = chess.Board()
                 st.session_state.move_history = []
-                st.session_state.board_key += 1
                 st.rerun()
         
         with ctrl_col2:
@@ -249,31 +203,29 @@ if mode == "🎮 Interactive Board":
                     st.session_state.board.pop()
                     if st.session_state.move_history:
                         st.session_state.move_history.pop()
-                    st.session_state.board_key += 1
                     st.rerun()
         
         with ctrl_col3:
             if st.button("🔄 Flip", use_container_width=True):
-                st.session_state.board_key += 1
+                # Flip by creating board from current FEN
                 st.rerun()
         
         with ctrl_col4:
-            if st.button("📋 FEN", use_container_width=True):
+            if st.button("📋 Copy FEN", use_container_width=True):
                 st.code(st.session_state.board.fen(), language="text")
         
-        # Load position
+        # Load position section
         st.markdown("### 📥 Load Position")
-        fen_input = st.text_input("FEN:", value=st.session_state.board.fen(), key="fen_input")
+        fen_input = st.text_input("FEN String:", value=st.session_state.board.fen(), key="fen_input")
         
         if st.button("Load FEN"):
             try:
                 st.session_state.board = chess.Board(fen_input)
                 st.session_state.move_history = []
-                st.session_state.board_key += 1
                 st.success("✅ Position loaded!")
                 st.rerun()
             except:
-                st.error("❌ Invalid FEN!")
+                st.error("❌ Invalid FEN string!")
     
     with col2:
         st.markdown("### 🎯 Analysis")
@@ -287,55 +239,74 @@ if mode == "🎮 Interactive Board":
                     
                     st.markdown(f"""
                     <div class="metric-card">
-                    <h4>📊 Position</h4>
-                    <p><strong>Eval:</strong> {metrics.position_eval:.0f} cp</p>
-                    <p><strong>Risk:</strong> {metrics.risk_score:.1f}/100</p>
+                    <h4>📊 Position Analysis</h4>
+                    <p><strong>Evaluation:</strong> {metrics.position_eval:.0f} cp</p>
+                    <p><strong>Risk Score:</strong> {metrics.risk_score:.1f}/100</p>
                     <p><strong>Complexity:</strong> {metrics.complexity:.1f}/100</p>
                     </div>
                     """, unsafe_allow_html=True)
                     
                     st.markdown("### 🎯 Top 3 Moves")
                     for i, move in enumerate(metrics.top_moves[:3], 1):
-                        st.markdown(f"**{i}. {move['move']}** → {move['score']:.0f} cp")
+                        st.markdown(f"**{i}. {move['move']}** → Eval: {move['score']:.0f} cp")
                 
                 except Exception as e:
                     st.error(f"Error: {e}")
         
-        # Manual move input
-        if not HAS_INTERACTIVE_BOARD:
-            st.markdown("### ✍️ Manual Move")
-            move_input = st.text_input("Move (e.g., e4, Nf3):", key="move_input")
-            
-            if st.button("▶️ Play", use_container_width=True):
+        # Move input
+        st.markdown("### ✍️ Make a Move")
+        
+        col_a, col_b = st.columns(2)
+        with col_a:
+            move_input = st.text_input("Move (e.g., e4, Nf3, e2e4):", key="move_input")
+        with col_b:
+            st.write("")  # Spacing
+            st.write("")  # Spacing
+            play_button = st.button("▶️ Play Move", use_container_width=True)
+        
+        if play_button and move_input:
+            try:
+                move = None
+                # Try UCI format first (e2e4)
                 try:
-                    move = None
-                    try:
-                        move = chess.Move.from_uci(move_input)
-                    except:
-                        try:
-                            move = st.session_state.board.parse_san(move_input)
-                        except:
-                            pass
-                    
-                    if move and move in st.session_state.board.legal_moves:
-                        st.session_state.board.push(move)
-                        st.session_state.move_history.append(move_input)
-                        st.session_state.board_key += 1
-                        st.success(f"✅ {move_input}")
-                        st.rerun()
-                    else:
-                        st.error("❌ Illegal move!")
+                    move = chess.Move.from_uci(move_input)
                 except:
-                    st.error("Invalid format!")
+                    # Try SAN format (e4, Nf3)
+                    try:
+                        move = st.session_state.board.parse_san(move_input)
+                    except:
+                        pass
+                
+                if move and move in st.session_state.board.legal_moves:
+                    st.session_state.board.push(move)
+                    st.session_state.move_history.append(st.session_state.board.san(move))
+                    st.success(f"✅ Played: {move_input}")
+                    st.rerun()
+                else:
+                    st.error("❌ Illegal move! Try format: e4 or e2e4")
+            except Exception as e:
+                st.error(f"Invalid move format: {e}")
+        
+        # Show legal moves
+        if st.checkbox("Show Legal Moves"):
+            legal_moves = list(st.session_state.board.legal_moves)
+            legal_sans = [st.session_state.board.san(m) for m in legal_moves[:20]]  # Show first 20
+            st.write(f"**Legal moves:** {', '.join(legal_sans)}")
+            if len(legal_moves) > 20:
+                st.caption(f"...and {len(legal_moves) - 20} more")
         
         # Move history
         if st.session_state.move_history:
             st.markdown("### 📜 Move History")
-            history_text = " ".join([
-                f"{(i//2)+1}.{move}" if i % 2 == 0 else move 
-                for i, move in enumerate(st.session_state.move_history)
-            ])
-            st.text_area("Moves:", value=history_text, height=150, key="history")
+            # Format as proper chess notation
+            history_text = ""
+            for i, move in enumerate(st.session_state.move_history):
+                if i % 2 == 0:
+                    history_text += f"{(i//2)+1}. {move} "
+                else:
+                    history_text += f"{move}\n"
+            
+            st.text_area("Moves:", value=history_text.strip(), height=150, key="history_display")
 
 elif mode == "📚 Sample Games":
     st.markdown("## 📚 Sample Games")
@@ -355,7 +326,7 @@ elif mode == "👤 My Games":
     my_games = load_my_games()
     
     if not my_games:
-        st.warning("No games found. Use 'Upload PGN' to add games!")
+        st.warning("No games found. Use 'Upload PGN' to add your games!")
     else:
         st.success(f"✅ {len(my_games)} games loaded")
         
@@ -369,7 +340,7 @@ elif mode == "👤 My Games":
         pgn_input = my_games[selected_idx]['pgn']
         
         st.markdown(f"""
-        **Details:**
+        **Game Details:**
         - **White:** {my_games[selected_idx]['white']} ({my_games[selected_idx]['white_elo']})
         - **Black:** {my_games[selected_idx]['black']} ({my_games[selected_idx]['black_elo']})
         - **Result:** {my_games[selected_idx]['result']}
@@ -379,20 +350,24 @@ elif mode == "👤 My Games":
         with st.expander("📄 View PGN"):
             st.code(pgn_input, language="text")
 
-else:  # Upload
+else:  # Upload PGN
     st.markdown("## 📁 Upload Your Game")
     
-    upload_type = st.radio("Method:", ["Paste PGN", "Upload File"])
+    upload_type = st.radio("How to provide PGN:", ["Paste PGN", "Upload File"])
     
     if upload_type == "Paste PGN":
-        pgn_input = st.text_area("Paste PGN here:", height=200, placeholder="[Event \"My Game\"]\n\n1. e4 e5...")
+        pgn_input = st.text_area(
+            "Paste PGN here:",
+            height=200,
+            placeholder="[Event \"My Game\"]\n[Site \"Chess.com\"]\n\n1. e4 e5 2. Nf3 Nc6..."
+        )
     else:
         file = st.file_uploader("Choose PGN file", type=['pgn', 'txt'])
         if file:
             pgn_input = file.read().decode('utf-8')
             st.success("✅ File uploaded!")
 
-# Analyze button
+# Analyze button (for non-interactive modes)
 if mode != "🎮 Interactive Board" and pgn_input:
     if st.button("🚀 Analyze Game", type="primary", use_container_width=True):
         with st.spinner(f"Analyzing up to {max_moves} moves... (est. {max_moves * 2} seconds)"):
@@ -416,17 +391,18 @@ if mode != "🎮 Interactive Board" and pgn_input:
                 progress_bar.empty()
                 
                 if analyses:
-                    st.success(f"✅ Analyzed {len(analyses)} moves!")
+                    st.success(f"✅ Analysis complete! Analyzed {len(analyses)} moves")
                     st.balloons()
                     st.session_state['analyses'] = analyses
                     st.session_state['report'] = report
                 else:
-                    st.error("No moves found in PGN")
+                    st.error("❌ No moves found in PGN")
             
             except Exception as e:
                 st.error(f"Error: {e}")
                 import traceback
-                st.code(traceback.format_exc())
+                with st.expander("🐛 Debug Info"):
+                    st.code(traceback.format_exc())
 
 # Display results
 if 'analyses' in st.session_state and mode != "🎮 Interactive Board":
@@ -436,35 +412,40 @@ if 'analyses' in st.session_state and mode != "🎮 Interactive Board":
     st.divider()
     st.markdown("## 📊 Analysis Results")
     
-    # Summary
+    # Summary metrics
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Moves", report['total_moves'])
+        st.metric("📝 Moves", report['total_moves'])
     with col2:
         blunders = report['white'].get('blunders', 0) + report['black'].get('blunders', 0)
-        st.metric("Blunders", blunders)
+        st.metric("💥 Blunders", blunders)
     with col3:
         mistakes = report['white'].get('mistakes', 0) + report['black'].get('mistakes', 0)
-        st.metric("Mistakes", mistakes)
+        st.metric("🔴 Mistakes", mistakes)
     with col4:
         avg_risk = (report['white'].get('avg_risk', 0) + report['black'].get('avg_risk', 0)) / 2
-        st.metric("Avg Risk", f"{avg_risk:.1f}")
+        st.metric("📊 Avg Risk", f"{avg_risk:.1f}")
     
-    # Move-by-move with board preview
+    # Move-by-move analysis with board preview
     st.markdown("### 📝 Move-by-Move Analysis")
     
     for a in analyses:
         emoji = {"excellent": "🟢", "good": "🟡", "inaccuracy": "🟠", "mistake": "🔴", "blunder": "💥"}
         player = "⚪" if a.white_to_move else "⚫"
         
-        with st.expander(f"{emoji.get(a.classification, '⚪')} {a.move_number}. {a.move} ({player}) • {a.classification.upper()}"):
+        with st.expander(
+            f"{emoji.get(a.classification, '⚪')} Move {a.move_number}. {a.move} ({player}) • {a.classification.upper()}"
+        ):
             mcol1, mcol2 = st.columns([1, 2])
             
             with mcol1:
-                # Show board position after move
-                board_after = chess.Board(a.fen_after)
-                svg = chess.svg.board(board_after, size=250)
-                st.markdown(f'<div style="display: flex; justify-content: center;">{svg}</div>', unsafe_allow_html=True)
+                # Show board after move
+                try:
+                    board_after = chess.Board(a.fen_after)
+                    svg = chess.svg.board(board_after, size=250)
+                    st.markdown(f'<div style="display: flex; justify-content: center;">{svg}</div>', unsafe_allow_html=True)
+                except:
+                    st.write("Board preview unavailable")
             
             with mcol2:
                 col1, col2, col3 = st.columns(3)
@@ -474,12 +455,12 @@ if 'analyses' in st.session_state and mode != "🎮 Interactive Board":
                     st.metric("Risk", f"{a.risk_score:.1f}/100")
                 with col3:
                     if not a.is_best_move:
-                        st.markdown(f"**Better:**")
+                        st.markdown(f"**Better Move:**")
                         st.code(a.best_alternative)
                     else:
                         st.success("✓ Best move!")
     
-    # Stats
+    # Player statistics
     st.divider()
     st.markdown("### 📈 Player Statistics")
     
@@ -493,7 +474,7 @@ if 'analyses' in st.session_state and mode != "🎮 Interactive Board":
         st.write(f"🟠 Inaccuracies: {w.get('inaccuracies', 0)}")
         st.write(f"🔴 Mistakes: {w.get('mistakes', 0)}")
         st.write(f"💥 Blunders: {w.get('blunders', 0)}")
-        st.metric("Avg Risk", f"{w.get('avg_risk', 0):.1f}/100")
+        st.metric("Average Risk", f"{w.get('avg_risk', 0):.1f}/100")
     
     with col2:
         st.markdown("#### ⚫ Black")
@@ -503,7 +484,7 @@ if 'analyses' in st.session_state and mode != "🎮 Interactive Board":
         st.write(f"🟠 Inaccuracies: {b.get('inaccuracies', 0)}")
         st.write(f"🔴 Mistakes: {b.get('mistakes', 0)}")
         st.write(f"💥 Blunders: {b.get('blunders', 0)}")
-        st.metric("Avg Risk", f"{b.get('avg_risk', 0):.1f}/100")
+        st.metric("Average Risk", f"{b.get('avg_risk', 0):.1f}/100")
 
 # Footer
 st.divider()
@@ -511,7 +492,7 @@ st.markdown("""
 <div style='text-align: center; color: #666; padding: 2rem 0;'>
     <p><strong>Chess Risk Analyzer</strong></p>
     <p>Soham Gugale • Duke University</p>
-    <p><a href='https://chess.com/member/sohamgugale'>Chess.com</a> • 
-    <a href='https://github.com/sohamgugale'>GitHub</a></p>
+    <p><a href='https://chess.com/member/sohamgugale' target='_blank'>Chess.com: Sohamgugale</a> • 
+    <a href='https://github.com/sohamgugale' target='_blank'>GitHub: sohamgugale</a></p>
 </div>
 """, unsafe_allow_html=True)

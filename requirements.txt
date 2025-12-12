@@ -9,4 +9,3 @@ plotly>=5.17.0
 requests>=2.31.0
 tqdm>=4.66.0
 Pillow>=10.0.0
-streamlit-chess-board==0.1.0
